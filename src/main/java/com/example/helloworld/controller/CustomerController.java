@@ -5,9 +5,8 @@ import com.example.helloworld.dto.EncryptedRequest;
 import com.example.helloworld.model.Customer;
 import com.example.helloworld.repository.CustomerRepository;
 import com.example.helloworld.util.AESUtil;
-import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -24,18 +23,18 @@ import java.util.Map;
 public class CustomerController {
     private static final Logger log = LoggerFactory.getLogger(CustomerController.class);
 
+    ///  Instance of the Customer Repository that extends the JPA Repository
     private final CustomerRepository customerRepository;
-    //    @Autowired
-    //    private UserRepository userRepository;
 
-    // Constructor injection is used here we can do this on using Autowired like above
-    // Spring will handle this for us
+
+    /// Constructor injection is used here we can do this on using Autowired like above
+    /// Spring will handle this for us
     public CustomerController(CustomerRepository customerRepository) {
         this.customerRepository = customerRepository;
     }
 
     @PostMapping("/add")
-    public ResponseEntity<ApiResponse<Customer>> addCustomer(@RequestBody EncryptedRequest request) {
+    public ResponseEntity<Map<String, Object>> addCustomer(@RequestBody EncryptedRequest request) {
         try{
             String decryptedJson = AESUtil.decrypt(request.getData());
 
@@ -45,45 +44,50 @@ public class CustomerController {
 
             customerRepository.save(customer);
 
-//            return ResponseEntity.status(HttpStatus.CREATED)
-//                    .body(ApiResponse.success("Customer saved", HttpStatus.CREATED.value()));
-//            customerRepository.save(customer);
-//            ApiResponse<Customer> successResponse = ApiResponse.success(
-//                    "Customer added successfully",
-//                    HttpStatus.CREATED.value() // Use 201 Created for successful resource creation
-//            );
-            return ResponseEntity.ok(ApiResponse.success("Customer added successfully", HttpStatus.CREATED.value(), customer));
+            Map<String, Object> result= Map.of(
+                "status", "ok",
+                "data", customer
+            );
+            return ResponseEntity.ok(result);
         } catch (Exception e) {
             throw new RuntimeException("Internal error fetching customer", e);
         }
     }
 
-    @PostMapping("/encrypt")
-    public ResponseEntity<Map<String, String>> encryptCustomer(@RequestBody Customer customer) {
-        try {
-            ObjectMapper mapper = new ObjectMapper();
-            String customerJson = mapper.writeValueAsString(customer);
-            String encrypted = AESUtil.encrypt(customerJson);
-
-            Map<String, String> response = new HashMap<>();
-            response.put("data", encrypted);
-
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Encryption failed: " + e.getMessage()));
-        }
-    }
 
     @GetMapping("/all")
-    public List<Customer> getAllCustomers() {
-        return customerRepository.findAll();
+    public ResponseEntity<Map<String, Object>> getAllCustomers() {
+        try{
+            List<Customer> customers = customerRepository.findAll();
+            /// It will help as to read or write the JSON type from POJO class
+            ObjectMapper mapper = new ObjectMapper();
+            // Convert the JSON objects into String
+            String jsonData = mapper.writeValueAsString(customers);
+            // Encrypt the JSON string
+            String encryptedData = AESUtil.encrypt(jsonData);
+            // Put encrypted string into a Map
+            Map<String, Object> responseMap = Map.of(
+                "data", encryptedData,
+                "code", HttpStatus.OK.value(),
+                "status", "ok"
+            );
+            return ResponseEntity.ok(responseMap);
+        } catch (Exception e) {
+            Map<String, Object> errorMap = new HashMap<>();
+            errorMap.put("error", "Failed to fetch and encrypt customers.");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorMap);
+        }
     }
 
     // Delete the Customer based on their ID
     @DeleteMapping("/delete")
-    public String deleteCustomer(@RequestParam long id) {
+    public String deleteCustomer(@RequestParam String data) {
         try {
+            String decryptedJson = AESUtil.decrypt(data);
+
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode jsonNode = mapper.readTree(decryptedJson);
+            Long id = jsonNode.get("id").asLong();
             if (customerRepository.existsById(id)) {
                 customerRepository.deleteById(id);
                 return "Customer with ID " + id + " has been deleted successfully.";
@@ -91,7 +95,7 @@ public class CustomerController {
                 return "Customer with ID " + id + " does not exist.";
             }
         } catch (Exception e) {
-            return "Failed to delete customer with ID " + id + ". Error: " + e.getMessage();
+            return "Failed to delete customer" + ". Error: " + e.getMessage();
         }
     }
 
