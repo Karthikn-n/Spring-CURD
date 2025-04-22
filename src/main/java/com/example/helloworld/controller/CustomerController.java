@@ -5,6 +5,7 @@ import com.example.helloworld.dto.EncryptedRequest;
 import com.example.helloworld.model.Customer;
 import com.example.helloworld.repository.CustomerRepository;
 import com.example.helloworld.util.AESUtil;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -26,11 +27,13 @@ public class CustomerController {
     ///  Instance of the Customer Repository that extends the JPA Repository
     private final CustomerRepository customerRepository;
 
+    private final ObjectMapper mapper;
 
     /// Constructor injection is used here we can do this on using Autowired like above
     /// Spring will handle this for us
-    public CustomerController(CustomerRepository customerRepository) {
+    public CustomerController(CustomerRepository customerRepository, ObjectMapper mapper) {
         this.customerRepository = customerRepository;
+        this.mapper = mapper;
     }
 
     @PostMapping("/add")
@@ -85,7 +88,6 @@ public class CustomerController {
         try {
             String decryptedJson = AESUtil.decrypt(data);
 
-            ObjectMapper mapper = new ObjectMapper();
             JsonNode jsonNode = mapper.readTree(decryptedJson);
             Long id = jsonNode.get("id").asLong();
             if (customerRepository.existsById(id)) {
@@ -99,22 +101,41 @@ public class CustomerController {
         }
     }
 
-    // Add list of Customers from the Postman
+    /// Add list of Customers from the Postman
     @PostMapping("/addCustomers")
-    public ResponseEntity<ApiResponse<Void>> addCustomers(@RequestBody EncryptedRequest request) {
+    public ResponseEntity<String> addCustomers(@RequestBody EncryptedRequest request) {
         try {
             String decryptedJson = AESUtil.decrypt(request.getData());
-
-            ObjectMapper mapper = new ObjectMapper();
-
-            List<Customer> customers = Arrays.asList(mapper.readValue(decryptedJson, Customer[].class));
-
+            List<Customer> customers = mapper.readValue(decryptedJson, new TypeReference<List<Customer>>() {
+            });
             customerRepository.saveAll(customers);
-
-            return ResponseEntity.status(HttpStatus.CREATED)
-                    .body(ApiResponse.success("Customers added successfully", HttpStatus.CREATED.value()));
+            // save customers to database if needed
+            return ResponseEntity.status(HttpStatus.CREATED).body("Customers added successfully");
         } catch (Exception e) {
-            throw new RuntimeException("Internal error saving customers", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Decryption error: " + e.getMessage());
+        }
+    }
+    @PostMapping("/encrypt")
+    public ResponseEntity<String> encryptData(@RequestBody List<Customer> customers) {
+        try {
+            String json = mapper.writeValueAsString(customers);
+            String encrypted = AESUtil.encrypt(json);
+            return ResponseEntity.ok(encrypted);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Encryption error: " + e.getMessage());
+        }
+    }
+
+    @PostMapping(value = "/decrypt")
+    public ResponseEntity<String> decryptData(@RequestBody String encryptedData) {
+        try {
+            String decryptedData = AESUtil.decrypt(encryptedData);
+            return ResponseEntity.ok(decryptedData);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Decryption Error: " + e.getMessage());
         }
     }
 }

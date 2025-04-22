@@ -5,8 +5,10 @@ import javax.crypto.spec.SecretKeySpec;
 import java.util.Base64;
 
 public class AESUtil {
+    public static final String SHA_CRYPT = "SHA-256";
     private static final String SECRET_KEY = "3mtree8u51n33ss501ut10nm33n6v33r"; // 32 chars for AES-256
     private static final String ALGORITHM = "AES";
+    public static final String AES_ALGORITHM_GCM = "AES/GCM/NoPadding";
 
     /// Encrypt any type data
     public static String encrypt(String data) throws Exception {
