@@ -1,5 +1,6 @@
 package com.example.helloworld.security.auth;
 
+import com.example.helloworld.security.model.EncryptedResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -31,7 +32,7 @@ public class AuthenticationController {
     /// application/x-www-form-urlencoded
     /// {@link ResponseEntity @ResponseEntity} is send HTTP response from it In-Built template with our response params
     @PostMapping("/register")
-    public ResponseEntity<AuthenticationResponse> register(
+    public ResponseEntity<EncryptedResponse> register(
             @RequestBody RegisterRequest request
     ) {
         return ResponseEntity.ok(service.register(request));
